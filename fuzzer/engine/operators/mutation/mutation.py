@@ -9,6 +9,8 @@ from utils import settings
 from ...plugin_interfaces.operators.mutation import Mutation
 
 class Mutation(Mutation):
+
+    # 使用变异概率初始化，pm一般比较小
     def __init__(self, pm):
         '''
         :param pm: The probability of mutation (usually between 0.001 ~ 0.1)
@@ -19,6 +21,7 @@ class Mutation(Mutation):
 
         self.pm = pm
 
+    # 接收一个个体作为输入，并返回变异后的个体
     def mutate(self, individual, engine):
         for gene in individual.chromosome:
             # TRANSACTION

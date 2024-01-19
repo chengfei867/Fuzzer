@@ -102,11 +102,11 @@ class EvolutionaryFuzzingEngine(object):
 
         # Attributes assignment.
         self.population = population
-        self.fitness = fitness
         self.selection = selection
         self.crossover = crossover
         self.mutation = mutation
         self.analysis = [] if analysis is None else [a() for a in analysis]
+        self.fitness = fitness
         self.mapping = mapping
 
         # Maxima and minima in population.
@@ -128,26 +128,31 @@ class EvolutionaryFuzzingEngine(object):
         Run the Genetic Algorithm optimization iteration with specified parameters.
         '''
         try:
+            # 记录执行开始的时间
             execution_begin = time.time()
 
+            # 检查是否设置了适应度函数
             if self.fitness is None:
                 raise AttributeError('No fitness function in GA engine')
 
-            # Setup analysis objects.
+            # 初始化每个分析模块
             for a in self.analysis:
                 a.setup(ng=ng, engine=self)
                 a.register_step(g=-1, population=self.population, engine=self)
 
-            # Enter evolution iteration.
+            # 模糊测试主循环
+            # 初始化代数为0
             g = 0
+            # 在迭代到指定的代数或执行时间之前持续进行
             while g < ng or settings.GLOBAL_TIMEOUT:
                 if settings.GLOBAL_TIMEOUT and time.time() - execution_begin >= settings.GLOBAL_TIMEOUT:
                     break
-
+                # 设置当前代数为g
                 self.current_generation = g
 
+                # 初始化一个空列表indvs，用于存储新一代的个体
                 indvs = []
-                # NOTE: One series of genetic operation generates 2 new individuals.
+                # 计算每次迭代中需要产生的新个体对的数量，即种群大小的一半。
                 size = self.population.size // 2
 
                 """for i in range(self.population.size):
@@ -161,18 +166,18 @@ class EvolutionaryFuzzingEngine(object):
                             output += " " + tx["data"]
                     print(output)"""
 
-                # Fill the new population.
+                # 对于每对个体（父母个体对）
                 for _ in range(size):
-                    # Select father and mother.
+                    # 通过选择算子选择父代
                     parents = self.selection.select(self.population, fitness=self.fitness)
-                    # Crossover.
+                    # 通过交叉算子产生两个新个体
                     children = self.crossover.cross(*parents)
-                    # Mutation.
+                    # 对每个新个体进行变异操作.
                     children = [self.mutation.mutate(child, self) for child in children]
-                    # Collect children.
+                    # 将产生的子代加入到新一代的个体列表中
                     indvs.extend(children)
 
-                # The next generation.
+                # 更新新的种群
                 self.population.individuals = indvs
 
                 # Run all analysis if needed.
@@ -241,6 +246,7 @@ class EvolutionaryFuzzingEngine(object):
 
             # Check fitness.
             fitness = fn(indv)
+            # 检查适应度值是否有效
             is_invalid = (type(fitness) is not float) or (math.isnan(fitness))
             if is_invalid:
                 msg = 'Fitness value(value: {}, type: {}) is invalid'

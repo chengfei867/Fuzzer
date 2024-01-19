@@ -22,10 +22,10 @@ class DataDependencyLinearRankingSelection(Selection):
 
     def select(self, population, fitness):
         '''
-        Select a pair of parent individuals using linear ranking method.
+        使用现行排序方法选择一对父代个体
         '''
 
-        # Add rank to all individuals in population.
+        # 计算所有个体的适应度
         all_fits = population.all_fits(fitness)
         indvs = population.individuals
         sorted_indvs = sorted(indvs, key=lambda indv: all_fits[indvs.index(indv)])

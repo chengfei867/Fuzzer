@@ -20,7 +20,10 @@ from z3.z3util import get_vars
 
 from utils import settings
 
+# 对每个测试用例（个体）执行的智能合约进行追踪，并收集有关代码覆盖率、分支覆盖率、交易数量等信息
 class ExecutionTraceAnalyzer(OnTheFlyAnalysis):
+    # 初始化分析器，设置日志记录器，并关联一个 FuzzingEnvironment 对象，
+    # 这个环境对象包含了智能合约的执行环境和状态信息
     def __init__(self, fuzzing_environment: FuzzingEnvironment) -> None:
         self.logger = initialize_logger("Analysis")
         self.env = fuzzing_environment
@@ -62,13 +65,17 @@ class ExecutionTraceAnalyzer(OnTheFlyAnalysis):
         # Update statistic variables.
         engine._update_statvars()
 
+    #
     def register_step(self, g, population, engine):
+        # 执行分析器的主要逻辑
         self.execute(population, engine)
 
+        # 计算代码覆盖率
         code_coverage_percentage = 0
         if len(self.env.overall_pcs) > 0:
             code_coverage_percentage = (len(self.env.code_coverage) / len(self.env.overall_pcs)) * 100
 
+        # 计算分支覆盖率
         branch_coverage = 0
         for pc in self.env.visited_branches:
             branch_coverage += len(self.env.visited_branches[pc])
@@ -76,6 +83,7 @@ class ExecutionTraceAnalyzer(OnTheFlyAnalysis):
         if len(self.env.overall_jumpis) > 0:
             branch_coverage_percentage = (branch_coverage / (len(self.env.overall_jumpis) * 2)) * 100
 
+        # 输出当前代数统计信息
         msg = 'Generation number {} \t Code coverage: {:.2f}% ({}/{}) \t Branch coverage: {:.2f}% ({}/{}) \t ' \
               'Transactions: {} ({} unique)   \t Time: {}'.format(
             g + 1, code_coverage_percentage, len(self.env.code_coverage), len(self.env.overall_pcs),
@@ -83,7 +91,7 @@ class ExecutionTraceAnalyzer(OnTheFlyAnalysis):
             time.time() - self.env.execution_begin)
         self.logger.title(msg)
 
-        # Save to results
+        # 将结果存储到环境变量中
         if "generations" not in self.env.results:
             self.env.results["generations"] = []
 
@@ -96,6 +104,7 @@ class ExecutionTraceAnalyzer(OnTheFlyAnalysis):
             "branch_coverage": branch_coverage_percentage
         })
 
+        # 判断是否进行符号执行
         if len(self.env.code_coverage) == self.env.previous_code_coverage_length:
             self.symbolic_execution(population.indv_generator)
             if self.symbolic_execution_count == settings.MAX_SYMBOLIC_EXECUTION:
@@ -108,6 +117,7 @@ class ExecutionTraceAnalyzer(OnTheFlyAnalysis):
         else:
             self.symbolic_execution_count = 0
 
+        # 更新上一次代码覆盖率长度
         self.env.previous_code_coverage_length = len(self.env.code_coverage)
 
     def execution_function(self, indv, env: FuzzingEnvironment):

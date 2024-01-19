@@ -53,7 +53,7 @@ class InstrumentedEVM:
     # 配置以太坊链（Ethereum chain）和不同版本的以太坊虚拟机（EVM），
     # 设置日志记录器，并初始化账户列表等。
     # 接受可选的以太坊节点IP地址（eth_node_ip）和端口号（eth_node_port）作为参数
-    def __init__(self, eth_node_ip=None, eth_node_port=None) -> None:
+    def __init__(self, eth_rpc_url) -> None:
         # 使用Chain.configure方法配置区块链。
         # 这里定义了一个区块链类chain_class，并配置了不同区块高度对应的EVM版本。
         # 每个元组代表一个特定的区块高度及其对应的EVM版本。
@@ -80,15 +80,16 @@ class InstrumentedEVM:
 
         # 根据提供的IP地址和端口号，以及配置文件中的REMOTE_FUZZING设置，决定是否连接到远程以太坊节点。
         # 如果所有条件满足，则使用Web3库与远程节点建立连接；否则，将self.w3设置为None。
-        if eth_node_ip and eth_node_port and settings.REMOTE_FUZZING:
-            self.w3 = Web3(HTTPProvider('http://%s:%s' % (eth_node_ip, eth_node_port)))
+        if eth_rpc_url and settings.REMOTE_FUZZING:
+            self.w3 = Web3(HTTPProvider('http://%s' % eth_rpc_url))
         else:
             self.w3 = None
         # 初始化一个日志记录器
         self.logger = initialize_logger("EVM     ")
-        # 使用前面定义的chain_class和MyMemoryDB来初始化一个区块链实例self.chain。这个区块链从主网的创世区块头开始。
+        # 使用前面定义的chain_class和MyMemoryDB来初始化一个区块链实例self.chain，这个区块链从主网的创世区块头开始。
         self.chain = chain_class.from_genesis_header(AtomicDB(MyMemoryDB()), MAINNET_GENESIS_HEADER)
-        self.logger.title(f"Connected to blockchain node at {eth_node_ip}:{eth_node_port}")
+        self.logger.title(f"Connected to blockchain node at http://{eth_rpc_url}")
+        self.logger.info("w3:%s", self.w3)
         # 初始化一个空的账户列表self.accounts，用于存储模拟的账户信息。
         self.accounts = list()
         # 初始化self.snapshot为None，用于存储EVM状态的快照。
@@ -134,11 +135,13 @@ class InstrumentedEVM:
             # 使用Web3实例获取指定区块标识符的区块信息。
             _block = self.get_block_by_blockid(block_identifier)
         # 如果没有获取到区块信息（_block为None），则尝试从本地缓存中获取。
+        self.logger.info("_block:%s", _block)
         if not _block:
             # 如果block_identifier是主网的已知区块（如Homestead、Byzantium、Petersburg），
             # 则尝试从本地缓存中获取这个区块的信息。
             if block_identifier in [HOMESTEAD_MAINNET_BLOCK, BYZANTIUM_MAINNET_BLOCK, PETERSBURG_MAINNET_BLOCK]:
                 _block = self.get_cached_block_by_id(block_identifier)
+                # self.logger.info("_block:%s", _block)
             else:
                 # 如果区块标识符未知或不在预定义的列表中，记录错误并退出程序。
                 self.logger.error("Unknown block identifier.")
@@ -227,6 +230,7 @@ class InstrumentedEVM:
             value=amount,
             data=decode_hex(bin_code),
         )
+
         # 使用SpoofTransaction对交易进行包装，指定交易的发送者。
         # 这允许在不实际签名交易的情况下模拟交易的发送。
         tx = SpoofTransaction(tx, from_=decode_hex(creator))
@@ -235,6 +239,7 @@ class InstrumentedEVM:
         result = self.execute(tx, debug=debug)
         # 获取新创建的合约的地址。合约地址是从交易执行结果中提取的。
         address = to_canonical_address(encode_hex(result.msg.storage_address))
+        self.logger.info("tx_address:%s", address)
         # 在存储模拟器中为新创建的合约设置余额。
         # 这里设定余额为1，这是为了确保合约在测试中有足够的余额来执行操作。
         self.storage_emulator.set_balance(address, 1)

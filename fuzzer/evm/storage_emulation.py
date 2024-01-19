@@ -35,6 +35,7 @@ from web3 import HTTPProvider
 from web3 import Web3
 
 from utils import settings
+from utils.utils import initialize_logger
 
 global BLOCK_ID
 BLOCK_ID = "latest"
@@ -42,14 +43,15 @@ BLOCK_ID = "latest"
 # STORAGE EMULATOR
 class EmulatorAccountDB(BaseAccountDB):
     def __init__(self, db: BaseAtomicDB, state_root: Hash32 = BLANK_ROOT_HASH) -> None:
-        if settings.REMOTE_FUZZING and settings.RPC_HOST and settings.RPC_PORT:
-            self._w3 = Web3(HTTPProvider('http://%s:%s' % (settings.RPC_HOST, settings.RPC_PORT)))
+        if settings.REMOTE_FUZZING and settings.RPC_URL:
+            self._w3 = Web3(HTTPProvider('http://%s' % settings.RPC_URL))
             self._remote = self._w3.eth
         else:
             self._remote = None
         self.state_root = BLANK_ROOT_HASH
         self._raw_store_db = db
         self.snapshot = None
+        self.logger = initialize_logger("StateDB     ")
 
     def set_snapshot(self, snapshot):
         self.snapshot = snapshot
@@ -105,20 +107,27 @@ class EmulatorAccountDB(BaseAccountDB):
         if address in self._storage_emulator:
             del self._storage_emulator[address]
 
+    # 根据地址返回合约账户信息
     def _get_account(self, address: Address) -> Account:
         if address in self._account_emulator:
             account = self._account_emulator[address]
         elif not self._remote:
             account = Account()
         else:
+            # 从远程节点获取指定地址的合约代码
             code = self._remote.getCode(address, BLOCK_ID)
             if code:
+                # 取代码哈希
                 code_hash = keccak(code)
+                # 将代码哈希值与代码本身存储在代码存储模拟器中
                 self._code_storage_emulator[code_hash] = code
                 if self.snapshot != None:
+                    # 如果存在快照，则在快照中也保存代码的哈希和代码
                     self.snapshot["code"][code_hash] = code
             else:
                 code_hash = EMPTY_SHA3
+            # 创建一个新的 Account 对象，其中包含从远程节点获取的
+            # 交易计数、余额、状态根（这里用 BLANK_ROOT_HASH 表示空的状态根）和代码哈希。
             account = Account(
                 int(self._remote.getTransactionCount(address, BLOCK_ID)) + 1,
                 self._remote.getBalance(address, BLOCK_ID),

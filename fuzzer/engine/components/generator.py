@@ -115,6 +115,7 @@ INT_MIN = {
 MAX_RING_BUFFER_LENGTH = 10
 MAX_ARRAY_LENGTH = 2
 
+# 双端队列数据结构，用以后续测试
 class CircularSet:
     def __init__(self, set_size=MAX_RING_BUFFER_LENGTH, initial_set=None):
         self._q = collections.deque(maxlen=set_size)
@@ -154,19 +155,48 @@ class Generator:
         self.contract = contract
 
         # Pools
+
+        # 存储智能合约的函数签名（或哈希值）。
+        # 在生成测试用例时，从这个缓冲区中选取函数进行调用。
         self.function_circular_buffer = CircularSet(set_size=len(self.interface), initial_set=set(self.interface))
+
+        # 存储和管理测试过程中涉及的不同账户地址
         self.accounts_pool = {}
+
+        # 存储不同函数调用中使用的以太币数量
         self.amounts_pool = {}
+
+        # 存储函数参数的值
         self.arguments_pool = {}
+
+        # 存储时间戳
         self.timestamp_pool = {}
+
+        # 存储区块号
         self.blocknumber_pool = {}
+
+        # 存储账户余额
         self.balance_pool = {}
+
+        # 存储call操作结果
         self.callresult_pool = {}
+
+        # 存储gas限制
         self.gaslimit_pool = {}
+
+        # 存储合约代码大小
         self.extcodesize_pool = {}
+
+        # 存储返回数据大小
         self.returndatasize_pool = {}
+
+        # 存储数组类型参数的大小
         self.argument_array_sizes_pool = {}
+
+        # 存储字符串类型测试数据
         self.strings_pool = CircularSet()
+
+        # 存储字节序列测试数据
         self.bytes_pool = CircularSet()
 
     def generate_random_individual(self):

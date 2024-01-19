@@ -10,10 +10,12 @@ from eth_abi.exceptions import EncodingTypeError, ValueOutOfBounds, ParseError
 
 from utils.utils import initialize_logger
 
-class Individual():
+class Individual:
     def __init__(self, generator):
         self.logger = initialize_logger("Individual")
+        # 代表个体的基因型
         self.chromosome = []
+        # 代表个体的表现型
         self.solution = []
         self.generator = generator
 

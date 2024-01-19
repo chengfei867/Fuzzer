@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.21;
+pragma solidity ^0.8.17;
 
 contract Number {
-    uint256 private num = 1 ;
+    uint256 private num;
+
+    constructor(uint256 initNum) {
+        num = initNum;
+    }
 
     function add() public {
         num++;

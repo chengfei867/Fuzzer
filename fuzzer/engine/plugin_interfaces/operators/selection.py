@@ -11,7 +11,7 @@ class Selection(metaclass=SelectionMeta):
     operation.
     '''
 
-    def select(self, population):
+    def select(self, population, fitness):
         '''
         Called when we need to select parents from a population to later breeding.
 

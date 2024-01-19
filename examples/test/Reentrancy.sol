@@ -1,23 +1,30 @@
-// 简单的示例智能合约
-// 请注意：此合约有安全漏洞，仅用于演示目的，不要在生产环境中使用。
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
 
-pragma solidity ^0.8.21;
+// 简单的存储合约，故意包含重入漏洞
+contract VulnerableContract {
+    mapping(address => uint) public balances;
 
-contract SimpleVulnerableContract {
-    mapping(address => uint256) public balances;
-
+    // 存款函数
     function deposit() public payable {
+        require(msg.value > 0, "Deposit value must be greater than 0");
         balances[msg.sender] += msg.value;
     }
 
-    function withdraw(uint256 amount) public {
-        require(balances[msg.sender] >= amount, "Insufficient balance");
-        (bool success, ) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
-        balances[msg.sender] -= amount;
+    // 提款函数，包含重入漏洞
+    function withdraw() public {
+        uint balance = balances[msg.sender];
+        require(balance > 0, "Insufficient balance");
+
+        // 调用者可在接收到ETH之前重新进入此合约
+        (bool sent, ) = msg.sender.call{value: balance}("");
+        require(sent, "Failed to send Ether");
+
+        balances[msg.sender] = 0;
     }
 
-    function getBalance() public view returns (uint256) {
-        return balances[msg.sender];
+    // 获取合约余额
+    function getBalance() public view returns (uint) {
+        return address(this).balance;
     }
 }

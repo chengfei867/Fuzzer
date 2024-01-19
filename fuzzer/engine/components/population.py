@@ -20,6 +20,9 @@ class Population(object):
     # All individuals.
     individuals = Individuals('individuals')
 
+    # 参数 indv_template 是用于克隆种群中所有其他个体的模板。
+    # 参数 indv_generator 是一个用于生成个体的生成器。
+    # 参数 size 指定了种群的大小（个体数量）。
     def __init__(self, indv_template, indv_generator, size=100):
         '''
         Class for representing population in genetic algorithm.
@@ -42,10 +45,11 @@ class Population(object):
         # Generator individual.
         self.indv_generator = indv_generator
 
-        # Flag for monitoring changes of population.
+        # 监测种群变化的标识
         self._updated = False
 
         # Container for all individuals.
+        # 存储种群个体的列表，可以自动更新self._updated标识
         class IndvList(list):
             '''
             A proxy class inherited from built-in list to contain all

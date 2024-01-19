@@ -28,7 +28,7 @@ from engine.fitness import fitness_function
 from utils import settings
 from utils.source_map import SourceMap
 from utils.utils import initialize_logger, compile, get_interface_from_abi, get_pcs_and_jumpis, \
-    get_function_signature_mapping
+    get_function_signature_mapping, get_constructor_abi, encode_abi
 from utils.control_flow_graph import ControlFlowGraph
 
 
@@ -48,7 +48,7 @@ class Fuzzer:
     ## seed: 随机数生成器的种子。
     ## source_map (可选): 源码映射，用于定位源代码中的字节码。
     def __init__(self, contract_name, abi, deployment_bytecode, runtime_bytecode, test_instrumented_evm,
-                 blockchain_state, solver, args, seed, source_map=None):
+                 blockchain_state, solver, args, seed, source_map=None, *constructor_args):
         global logger
 
         # 这里初始化了一个全局日志记录器，并记录了一个标题，表明开始对特定合约进行模糊测试。
@@ -63,12 +63,13 @@ class Fuzzer:
         # 这一部分将传入的参数赋值给Fuzzer实例的属性。这包括合约的名称、接口、部署字节码、区块链状态、EVM实例和求解器。
         self.contract_name = contract_name
         self.interface = get_interface_from_abi(abi)
-        self.deployement_bytecode = deployment_bytecode
+        self.deployment_bytecode = deployment_bytecode
         self.blockchain_state = blockchain_state
         self.instrumented_evm = test_instrumented_evm
         self.solver = solver
         self.args = args
-
+        self.abi = abi
+        self.constructor_args = constructor_args
         # Get some overall metric on the code
         # 获取字节码中的程序计数器（PC）和JUMPI指令位置，这对于了解合约的结构和确定跳转点非常有用。
         self.overall_pcs, self.overall_jumpis = get_pcs_and_jumpis(runtime_bytecode)
@@ -106,9 +107,12 @@ class Fuzzer:
     def run(self):
         # 初始化要测试的智能合约的地址为None
         contract_address = None
-        # 调用创建了一些假账户，这对于模拟一个真实的区块链环境是有用的
+        # 调用创建了一些假账户
         self.instrumented_evm.create_fake_accounts()
-
+        # 打印interface信息
+        logger.info("interface:%s", self.interface)
+        logger.info("cargs:%s", self.constructor_args)
+        # logger.info("adi:%s", self.abi)
         # 检查是否提供了源代码
         if self.args.source:
             # 如果提供了源码，则区块链状态也作为可选项，若提供了则遍历所有状态中的交易
@@ -173,39 +177,37 @@ class Fuzzer:
                     # 使用上述构建的input字典以及交易的gasPrice调用deploy_transaction方法。
                     # 这个方法在模拟的EVM中执行交易。
                     out = self.instrumented_evm.deploy_transaction(input, int(transaction["gasPrice"]))
-
-            # 检查智能合约的ABI（应用程序二进制接口）中是否存在构造函数（constructor）。
-            # 如果存在，就从接口中删除它。构造函数在合约部署后不再需要，因此在初始化合约后将其从ABI中移除。
-            if "constructor" in self.interface:
-                del self.interface["constructor"]
-
-            # 如果contract_address为空，也就是上面区块链状态设置中不含有合约部署
+            # 如果contract_address为空，则需要先部署合约
             if not contract_address:
-                # 若没有构造器
-                if "constructor" not in self.interface:
-                    # 部署合约，这里指的是部署待测试的合约
-                    result = self.instrumented_evm.deploy_contract(self.instrumented_evm.accounts[0],
-                                                                   self.deployement_bytecode)
-                    # 如果部署过程中出现错误，将记录错误信息并退出程序。
-                    # sys.exit(-2)表示以错误状态结束程序。
-                    if result.is_error:
-                        logger.error("Problem while deploying contract %s using account %s. Error message: %s",
-                                     self.contract_name, self.instrumented_evm.accounts[0], result._error)
-                        sys.exit(-2)
-                    else:
-                        # 部署成功
-                        # 更新contract_address为新部署的合约地址
-                        # 将这个地址添加到账户列表中，增加交易计数，然后记录部署的合约地址
-                        contract_address = encode_hex(result.msg.storage_address)
-                        self.instrumented_evm.accounts.append(contract_address)
-                        self.env.nr_of_transactions += 1
-                        logger.debug("Contract deployed at %s", contract_address)
+                # 部署合约，这里指的是部署待测试的合约
+                # 若存在构造函数,先按照abi编码格式将构造参数连接到部署字节码后
+                self.deployment_bytecode = encode_abi(self.abi, self.deployment_bytecode,
+                                                      *self.constructor_args)
+                result = self.instrumented_evm.deploy_contract(self.instrumented_evm.accounts[0],
+                                                               self.deployment_bytecode)
+                # logger.info("result:%s",result)
+                # 如果部署过程中出现错误，将记录错误信息并退出程序。
+                # sys.exit(-2)表示以错误状态结束程序。
+                if result.is_error:
+                    logger.error("Problem while deploying contract %s using account %s. Error message: %s",
+                                 self.contract_name, self.instrumented_evm.accounts[0], result._error)
+                    sys.exit(-2)
+                else:
+                    # 部署成功
+                    # 更新contract_address为新部署的合约地址
+                    # 增加交易计数，然后记录部署的合约地址
+                    contract_address = encode_hex(result.msg.storage_address)
+                    logger.info("contract_address:%s", contract_address)
+                    # 确保后续交互时可以使用该合约
+                    # self.instrumented_evm.accounts.append(contract_address)
+                    self.env.nr_of_transactions += 1
+                    logger.debug("Contract deployed at %s", contract_address)
+                    # 构造函数在合约部署后不再需要。
+                    if 'constructor' in self.interface:
+                        del self.interface['constructor']
 
-            # 检查合约地址是否在账户列表中，如果是，则将其移除。
-            # 这可能是为了避免在后续的测试中将合约地址误用为普通账户。
             if contract_address in self.instrumented_evm.accounts:
                 self.instrumented_evm.accounts.remove(contract_address)
-
             # 获取了新部署合约的程序计数器（PC）和JUMP指令的位置，这对于理解合约的控制流程非常重要。
             # 这些信息存储在环境变量中，可能用于后续的分析和决策。
             self.env.overall_pcs, self.env.overall_jumpis = get_pcs_and_jumpis(
@@ -219,13 +221,15 @@ class Fuzzer:
         # 下面是模糊测试的逻辑
 
         # 创建模拟EVM的状态快照。这在模糊测试中非常有用，
-        # 因为可以在执行每个测试用例后重置EVM的状态到这个快照，确保每次测试的独立性。
+        # 因为可以在执行每个测试用例后重置EVM的状态到这个快照，确保:每次测试的独立性。
         self.instrumented_evm.create_snapshot()
 
         # 初始化一个Generator对象，用于生成模糊测试用例。
         # 它需要合约的接口、字节码、账户列表和合约地址。
+        logger.info("deployment_bytecode:%s", self.deployment_bytecode)
+        logger.info("accounts:%s", self.instrumented_evm.accounts)
         generator = Generator(interface=self.interface,
-                              bytecode=self.deployement_bytecode,
+                              bytecode=self.deployment_bytecode,
                               accounts=self.instrumented_evm.accounts,
                               contract=contract_address)
 
@@ -243,6 +247,7 @@ class Fuzzer:
         # 根据是否启用数据依赖性分析（data_dependency），它选择使用不同的选择和交叉算子。
 
         # 如果启用了数据依赖性分析
+        logger.info("data_dependency:%s", self.args.data_dependency)
         if self.args.data_dependency:
             # 在数据依赖性分析被启用的情况下，使用DataDependencyLinearRankingSelection作为选择算子。
             # 这种选择算子可能会考虑测试用例之间的数据依赖关系来改善选择过程。
@@ -267,6 +272,7 @@ class Fuzzer:
         # population：测试用例的初始种群。
         # selection、crossover、mutation：选择、交叉和变异算子，用于进化种群。
         # mapping：函数签名映射，这通过get_function_signature_mapping(self.env.abi)获取，可能用于辅助测试用例的生成和分析。
+        logger.info("mapping:%s",get_function_signature_mapping(self.env.abi))
         engine = EvolutionaryFuzzingEngine(population=population, selection=selection, crossover=crossover,
                                            mutation=mutation, mapping=get_function_signature_mapping(self.env.abi))
         # 注册一个适应度评估函数，使用fitness_function函数，并且传递参数x，这里的x表示的是单个测试用例(个体)
@@ -296,16 +302,13 @@ class Fuzzer:
 
         self.instrumented_evm.reset()
 
-
 def main():
     # 打印logo
-    print_logo()
+    print_logo() 
     # 解析命令行参数，并将解析后的参数存储在args变量中。
     args = launch_argument_parser()
-
     # 初始化日志记录器，用于整个程序的日志记录。
     logger = initialize_logger("Main    ")
-
     # Check if contract has already been analyzed
     # 检查是否指定了结果文件(args.results)，如果该文件已存在，则删除它并记录一条信息。
     # 这是为了避免重复分析同一合约。
@@ -327,8 +330,9 @@ def main():
     logger.title("Initializing seed to %s", seed)
 
     # 创建一个模拟的以太坊虚拟机（EVM）实例，并根据设置中指定的EVM版本配置它。
-    instrumented_evm = InstrumentedEVM(settings.RPC_HOST, settings.RPC_PORT)
+    instrumented_evm = InstrumentedEVM(settings.RPC_URL)
     instrumented_evm.set_vm_by_name(settings.EVM_VERSION)
+    # logger.info("instrumented_evm")
 
     # Create Z3 solver instance
     # 初始化一个Z3求解器实例，并为其设置超时时间。
@@ -361,16 +365,27 @@ def main():
     # Compile source code to get deployment bytecode, runtime bytecode and ABI
     # 检查是否通过命令行参数提供了源代码路径
     if args.source:
+        arguments = None
+        # 解析构造函数参数
+        if args.constructor_args:
+            try:
+                # 解析JSON字符串为Python对象
+                arguments = json.loads(args.constructor_args)
+                # 确保解析出来的是一个列表
+                if not isinstance(arguments, list):
+                    raise ValueError("Constructor arguments should be in list format.")
+            except json.JSONDecodeError:
+                logger.error("Error: Constructor arguments should be a valid JSON array.")
+                exit(1)
         # 如果源代码文件的扩展名为.sol，即Solidity源文件，继续执行后续代码
         if args.source.endswith(".sol"):
             # 调用compile函数，传递Solidity编译器的版本(args.solc_version)、
             # 以太坊虚拟机的版本(settings.EVM_VERSION)以及源代码文件路径，以编译智能合约。
             # 变量接收编译结果，这通常包括ABI、部署字节码和运行时字节码
             compiler_output = compile(args.solc_version, settings.EVM_VERSION, args.source)
-            output_filename = 'compiler_output.json'
-            with open(output_filename, 'w') as file:
-                # 将数据以 JSON 格式写入文件
-                json.dump(compiler_output, file, indent=4)
+            # 将JSON字符串写入文件
+            with open('compiler_output.json', 'w') as file:
+                file.write(json.dumps(compiler_output, indent=4))
             # 如果没有编译输出（可能由于编译错误），记录错误信息并退出程序
             if not compiler_output:
                 logger.error("No compiler output for: " + args.source)
@@ -386,9 +401,10 @@ def main():
                     # 如果这些都存在，创建一个SourceMap实例，用于映射源代码和编译后的字节码。
                     source_map = SourceMap(':'.join([args.source, contract_name]), compiler_output)
                     # 创建Fuzzer实例，传入合约名称、ABI、字节码等信息，并调用其run方法来执行模糊测试。
+                    logger.info("cargs:%s", args.constructor_args)
                     Fuzzer(contract_name, contract["abi"], contract['evm']['bytecode']['object'],
                            contract['evm']['deployedBytecode']['object'], instrumented_evm, blockchain_state, solver,
-                           args, seed, source_map).run()
+                           args, seed, source_map, *arguments).run()
         else:
             logger.error("Unsupported input file: " + args.source)
             sys.exit(-1)
@@ -400,6 +416,7 @@ def main():
             abi = json.load(json_file)
             # 将提供的合约地址转换为规范格式,从模拟的以太坊虚拟机（EVM）中获取指定地址的合约代码,
             # 将获取到的字节码转换为十六进制字符串，这是智能合约的运行时字节码
+            logger.info("instrumented_evm.:%s", instrumented_evm)
             runtime_bytecode = instrumented_evm.get_code(to_canonical_address(args.contract)).hex()
             if not runtime_bytecode:
                 # runtime_bytecode为空，可能表示指定地址没有部署的合约
@@ -436,6 +453,9 @@ def launch_argument_parser():
     parser.add_argument("-b", "--blockchain-state", type=str,
                         help="若通过源代码文件测试，则提供状态文件（.json）；若通过ABI测试，则提供区块高度.")
 
+    parser.add_argument("-cargs", "--constructor-args", type=str,
+                        help="若通过源代码文件测试，且待测合约需要传递构造参数，则提供待测合约构造参数.")
+
     # Compiler parameters
     parser.add_argument("--solc", help="Solidity编译器版本设置 (默认 '" + str(
         solcx.get_solc_version()) + "'). 已下载编译器版本: " + str(solcx.get_installed_solc_versions()) + ".",
@@ -468,8 +488,7 @@ def launch_argument_parser():
     parser.add_argument("-r", "--results", type=str, help="指定结果存储路径")
     parser.add_argument("--seed", type=float, help="通过给定的种子初始化随机数生成器.")
     parser.add_argument("--cfg", help="构建控制流图并突出显示代码覆盖率", action="store_true")
-    parser.add_argument("--rpc-host", help="以太坊 RPC主机名.", action="store", dest="rpc_host", type=str)
-    parser.add_argument("--rpc-port", help="以太坊 RPC端口号.", action="store", dest="rpc_port", type=int)
+    parser.add_argument("--rpc-url", help="以太坊RPC URl.", action="store", dest="rpc_url", type=str)
 
     parser.add_argument("--data-dependency",
                         help="是否启动数据依赖项分析，默认为1(0:不启动 ，1:启动)", action="store",
@@ -529,9 +548,9 @@ def launch_argument_parser():
         settings.PROBABILITY_CROSSOVER = args.probability_crossover
     if args.probability_mutation:
         settings.PROBABILITY_MUTATION = args.probability_mutation
-
-    if args.data_dependency == None:
-        args.data_dependency = 1
+    #
+    # if args.data_dependency == None:
+    #     args.data_dependency = 1
     if args.constraint_solving == None:
         args.constraint_solving = 1
     if args.environmental_instrumentation == None:
@@ -548,13 +567,11 @@ def launch_argument_parser():
         settings.MAX_SYMBOLIC_EXECUTION = args.max_symbolic_execution
 
     # 如果为abi测试模式，则开启远程模糊测试配置
+    # if args.rpc_host and args.rpc_port:
     if args.abi:
         settings.REMOTE_FUZZING = True
-
-    if args.rpc_host:
-        settings.RPC_HOST = args.rpc_host
-    if args.rpc_port:
-        settings.RPC_PORT = args.rpc_port
+    if args.rpc_url:
+        settings.RPC_URL = args.rpc_url
 
     return args
 

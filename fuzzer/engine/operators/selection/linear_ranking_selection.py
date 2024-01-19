@@ -7,11 +7,13 @@ from bisect import bisect_right
 
 from ...plugin_interfaces.operators.selection import Selection
 
+# 线性选择算子，使用线性排名的方式选择种群中的个体(即测试用例)，目的是从当前种群中选出优质的个体，以便他们能够进行交叉和变异。
 class LinearRankingSelection(Selection):
+    # pmin：最差个体选择概率
+    # pmax：最佳个体选择概率
     def __init__(self, pmin=0.1, pmax=0.9):
         '''
         Selection operator using Linear Ranking selection method.
-
         Reference: Baker J E. Adaptive selection methods for genetic
         algorithms[C]//Proceedings of an International Conference on Genetic
         Algorithms and their applications. 1985: 101-111.
@@ -19,6 +21,7 @@ class LinearRankingSelection(Selection):
         # Selection probabilities for the worst and best individuals.
         self.pmin, self.pmax = pmin, pmax
 
+    # 选择方法
     def select(self, population, fitness):
         '''
         Select a pair of parent individuals using linear ranking method.

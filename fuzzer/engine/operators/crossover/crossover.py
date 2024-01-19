@@ -9,7 +9,9 @@ from utils import settings
 from ...plugin_interfaces.operators.crossover import Crossover
 from ...components.individual import Individual
 
+# 交叉（杂交）产生新个体的方法，通过结合两个（或更多个）父代个体的特征来完成
 class Crossover(Crossover):
+    # pc：交叉概率
     def __init__(self, pc):
         '''
         :param pc: The probability of crossover (usaully between 0.25 ~ 1.0)
@@ -20,6 +22,7 @@ class Crossover(Crossover):
 
         self.pc = pc
 
+    # 这个方法接收两个个体（父代）作为输入，并返回两个新的个体（子代）
     def cross(self, father, mother):
         '''
         Cross the selected individuals.

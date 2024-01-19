@@ -1,10 +1,15 @@
 [
 	{
 		"inputs": [],
-		"name": "deposit",
+		"name": "receiveEth",
 		"outputs": [],
 		"stateMutability": "payable",
 		"type": "function"
+	},
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
 	},
 	{
 		"inputs": [],
@@ -14,14 +19,8 @@
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"name": "balances",
+		"inputs": [],
+		"name": "lastReceived",
 		"outputs": [
 			{
 				"internalType": "uint256",
@@ -34,7 +33,20 @@
 	},
 	{
 		"inputs": [],
-		"name": "getBalance",
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "unsafeRandom",
 		"outputs": [
 			{
 				"internalType": "uint256",

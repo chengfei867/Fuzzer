@@ -11,6 +11,7 @@ import subprocess
 
 from web3 import Web3
 from .settings import LOGGING_LEVEL
+from web3.contract import ContractConstructor
 
 
 #
@@ -177,7 +178,6 @@ def get_function_signature_mapping(abi):
             # 获取函数名称，并开始构建函数签名。
             # 函数签名是由函数名称和括号内的参数类型列表组成的字符串。
             function_name = field['name']
-            function_inputs = []
             signature = function_name + '('
             # 遍历函数参数，将每个参数的类型追加到签名字符串中，并在参数之间插入逗号。
             for i in range(len(field['inputs'])):
@@ -248,6 +248,7 @@ def get_pcs_and_jumpis(bytecode):
         pcs = [0]
     return pcs, jumpis
 
+
 # 将栈上的值转换为整数。
 # 如果栈值已经是整数类型，则直接返回该值；
 # 如果是字节序列，则将字节序列按大端序转换为整数。
@@ -258,6 +259,7 @@ def convert_stack_value_to_int(stack_value):
         return int.from_bytes(stack_value[1], "big")
     else:
         raise Exception("Error: Cannot convert stack value to int. Unknown type: " + str(stack_value[0]))
+
 
 # 将栈上的值转换为十六进制字符串。
 # 如果值是整数，则将其转换为十六进制字符串，并确保它前面填充零，总长度为64位。
@@ -270,13 +272,16 @@ def convert_stack_value_to_hex(stack_value):
     else:
         raise Exception("Error: Cannot convert stack value to hex. Unknown type: " + str(stack_value[0]))
 
+
 # 检查给定的值是否为固定整数类型。
 def is_fixed(value):
     return isinstance(value, int)
 
+
 # 将一个序列按指定长度分割成多个部分
 def split_len(seq, length):
     return [seq[i:i + length] for i in range(0, len(seq), length)]
+
 
 # 格式化并打印模糊测试生成的单个解决方案（即交易）的详细信息。
 # 参数：
@@ -287,7 +292,6 @@ def split_len(seq, length):
 # transaction_index：交易索引
 def print_individual_solution_as_transaction(logger, individual_solution, color="", function_signature_mapping={},
                                              transaction_index=None):
-
     # 遍历individual_solution列表中的每个元素。每个元素都代表一个交易。
     for index, input in enumerate(individual_solution):
         # 从当前元素中获取交易信息，存储在transaction字典中。
@@ -337,3 +341,21 @@ def print_individual_solution_as_transaction(logger, individual_solution, color=
 def normalize_32_byte_hex_address(value):
     as_bytes = eth_utils.to_bytes(hexstr=value)
     return eth_utils.to_normalized_address(as_bytes[-20:])
+
+
+def get_constructor_abi(contract_abi):
+    candidates = [abi for abi in contract_abi if abi["type"] == "constructor"]
+    if len(candidates) == 1:
+        return candidates[0]
+    elif len(candidates) == 0:
+        return None
+    elif len(candidates) > 1:
+        raise ValueError("Found multiple constructors.")
+    return None
+
+
+# bytecode:原字节码
+# *args:参数
+# 将参数编码为abi格式后附在字节码后
+def encode_abi(abi, bytecode, *args, **kwargs):
+    return ContractConstructor(Web3, abi, bytecode, *args, **kwargs).data_in_transaction

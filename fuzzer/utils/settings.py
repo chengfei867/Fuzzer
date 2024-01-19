@@ -19,24 +19,22 @@ PROBABILITY_MUTATION = 0.1
 MAX_SYMBOLIC_EXECUTION = 10
 # Solver timeout in milliseconds
 SOLVER_TIMEOUT = 100
-# List of attacker accounts
-ATTACKER_ACCOUNTS = ["0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"]
+#  List of attacker accounts
+ATTACKER_ACCOUNTS = ["0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef","0x1D32fBDAC460a5dD4682211a5a67E2C26c067C8D"]
 # Default gas limit for sending transactions
 GAS_LIMIT = 4500000
 # Default gas price for sending transactions
-GAS_PRICE = 10 
+GAS_PRICE = 10
 # Default account balance
-ACCOUNT_BALANCE = 100000000*(10**18)
-# Maximum length of individuals
+ACCOUNT_BALANCE = 100000000 * (10 ** 18)
+#  Maximum length of individuals
 MAX_INDIVIDUAL_LENGTH = 5
-# Logging level
+#  Logging level
 LOGGING_LEVEL = logging.INFO
-# Block height
+#  Block height
 BLOCK_HEIGHT = 'latest'
-# RPC Host
-RPC_HOST = 'localhost'
-# RPC Port
-RPC_PORT = 8545
+# RPC Url
+RPC_URL = "localhost:8545"
 # True = Remote fuzzing, False = Local fuzzing
 REMOTE_FUZZING = False
 # True = Environmental instrumentation enabled, False = Environmental instrumentation disabled
